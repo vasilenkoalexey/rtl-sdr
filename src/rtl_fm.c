@@ -194,6 +194,8 @@ void usage(void)
 		"\t[-s sample_rate (default: 24k)]\n"
 		"\t[-d device_index (default: 0)]\n"
 		"\t[-T enable bias-T on GPIO PIN 0 (works for rtl-sdr.com v3 dongles)]\n"
+		"\t[-D direct_sampling_mode (default: 0, 1 = I, 2 = Q, 3 = I below threshold, 4 = Q below threshold)]\n"
+		"\t[-D direct_sampling_threshold_frequency (default: 0 use tuner specific frequency threshold for 3 and 4)]\n"		
 		"\t[-g tuner_gain (default: automatic)]\n"
 		"\t[-l squelch_level (default: 0/off)]\n"
 		//"\t    for fm squelch is inverted\n"
@@ -1044,12 +1046,14 @@ int main(int argc, char **argv)
 	int dev_given = 0;
 	int custom_ppm = 0;
     int enable_biastee = 0;
+	enum rtlsdr_ds_mode ds_mode = RTLSDR_DS_IQ;
+	uint32_t ds_temp, ds_threshold = 0;	
 	dongle_init(&dongle);
 	demod_init(&demod);
 	output_init(&output);
 	controller_init(&controller);
 
-	while ((opt = getopt(argc, argv, "d:f:g:s:b:l:o:t:r:p:E:F:A:M:hT")) != -1) {
+	while ((opt = getopt(argc, argv, "d:f:g:s:b:l:o:t:r:p:E:F:A:M:D:hT")) != -1) {
 		switch (opt) {
 		case 'd':
 			dongle.dev_index = verbose_device_search(optarg);
@@ -1147,6 +1151,13 @@ int main(int argc, char **argv)
 		case 'T':
 			enable_biastee = 1;
 			break;
+		case 'D':
+			ds_temp = (uint32_t)( atofs(optarg) + 0.5 );
+			if (ds_temp <= RTLSDR_DS_Q_BELOW)
+				ds_mode = (enum rtlsdr_ds_mode)ds_temp;
+			else
+				ds_threshold = ds_temp;
+			break;			
 		case 'h':
 		default:
 			usage();
@@ -1215,6 +1226,9 @@ int main(int argc, char **argv)
 		fprintf(stderr, "activated bias-T on GPIO PIN 0\n");
 
 	verbose_ppm_set(dongle.dev, dongle.ppm_error);
+
+	/* Set direct sampling with threshold */
+	rtlsdr_set_ds_mode(dongle.dev, ds_mode, ds_threshold);
 
 	if (strcmp(output.filename, "-") == 0) { /* Write samples to stdout */
 		output.file = stdout;
